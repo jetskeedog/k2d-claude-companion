@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="hljs-light.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="hljs-dark.css" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="github-markdown.css">
+<script src="highlight.min.js"></script>
+<script src="marked.min.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #ffffff;
+    color: #1f2328;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; color: #e6edf3; }
+  }
+  .code {
+    display: flex;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    min-height: 100vh;
+  }
+  .gutter {
+    flex: none;
+    padding: 10px 10px 10px 12px;
+    text-align: right;
+    color: #8c959f;
+    user-select: none;
+    -webkit-user-select: none;
+    border-right: 1px solid rgba(128, 128, 128, 0.2);
+    white-space: pre;
+  }
+  .code pre { margin: 0; padding: 10px 14px; flex: 1; overflow: visible; }
+  .code pre code.hljs { padding: 0; background: transparent; white-space: pre; }
+  .markdown-body { box-sizing: border-box; max-width: 900px; padding: 24px 32px 48px; }
+  .markdown-body pre code.hljs { padding: 0; background: transparent; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  marked.use({ gfm: true, breaks: false });
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  const AUTO_DETECT_LIMIT = 100000;
+  const HIGHLIGHT_LIMIT = 1000000;
+
+  function highlight(text, lang) {
+    if (text.length > HIGHLIGHT_LIMIT) return escapeHtml(text);
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(text, { language: lang, ignoreIllegals: true }).value;
+    }
+    if (lang === "plaintext" || text.length > AUTO_DETECT_LIMIT) return escapeHtml(text);
+    return hljs.highlightAuto(text).value;
+  }
+
+  function renderCode(text, lang) {
+    const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n").length : text.split("\n").length;
+    let gutter = "";
+    for (let i = 1; i <= lines; i++) gutter += i + "\n";
+    return '<div class="code"><div class="gutter">' + gutter + '</div>' +
+           '<pre><code class="hljs">' + highlight(text, lang) + '</code></pre></div>';
+  }
+
+  function resolveAgainst(base, value) {
+    if (!base || !value || value.startsWith("#")) return value;
+    try { return new URL(value, base).href; } catch (e) { return value; }
+  }
+
+  function renderMarkdown(text, base) {
+    const html = marked.parse(text);
+    const wrapper = document.createElement("article");
+    wrapper.className = "markdown-body";
+    wrapper.innerHTML = html;
+    wrapper.querySelectorAll("img[src], source[src], video[src]").forEach(function (el) {
+      el.setAttribute("src", resolveAgainst(base, el.getAttribute("src")));
+    });
+    wrapper.querySelectorAll("a[href]").forEach(function (el) {
+      el.setAttribute("href", resolveAgainst(base, el.getAttribute("href")));
+    });
+    wrapper.querySelectorAll("pre code").forEach(function (el) {
+      const m = /language-([\w+#-]+)/.exec(el.className);
+      const lang = m ? m[1] : null;
+      el.innerHTML = highlight(el.textContent, lang);
+      el.classList.add("hljs");
+    });
+    wrapper.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(function (h) {
+      if (!h.id) {
+        h.id = h.textContent.trim().toLowerCase().replace(/[^\w\- ]+/g, "").replace(/\s+/g, "-");
+      }
+    });
+    return wrapper.outerHTML;
+  }
+
+  window.mdappRender = function (payload) {
+    const root = document.getElementById("root");
+    root.innerHTML = payload.mode === "markdown"
+      ? renderMarkdown(payload.text, payload.base)
+      : renderCode(payload.text, payload.lang);
+    window.scrollTo(0, 0);
+  };
+
+  // In-page anchors would otherwise navigate away from viewer.html.
+  document.addEventListener("click", function (e) {
+    const a = e.target.closest("a[href^='#']");
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
+    if (target) target.scrollIntoView();
+  });
+</script>
+</body>
+</html>
